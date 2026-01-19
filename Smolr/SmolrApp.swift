@@ -1,0 +1,114 @@
+//
+//  SmolrApp.swift
+//  Smolr
+//
+//  Created by Jimmy Houle on 2026-01-13.
+//
+import SwiftUI
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var pendingURLs: [URL] = []
+    var openTimer: Timer?
+    
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false 
+    }
+    
+    func application(_ application: NSApplication, open urls: [URL]) {
+        print("📂 Received \(urls.count) files")
+        pendingURLs.append(contentsOf: urls)
+        
+        openTimer?.invalidate()
+        openTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            print("✅ Opening \(self.pendingURLs.count) files")
+            
+            if NSApp.windows.isEmpty || NSApp.keyWindow == nil {
+                NSApp.activate(ignoringOtherApps: true)
+            }
+            
+            NotificationCenter.default.post(
+                name: NSNotification.Name("OpenFiles"),
+                object: self.pendingURLs
+            )
+            self.pendingURLs.removeAll()
+        }
+    }
+}
+
+@main
+struct SmolrApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    init() {
+        NSApplication.shared.setActivationPolicy(.regular)
+    }
+    var body: some Scene {
+        Window("Smolr", id: "main") {
+            ContentView()
+        }
+        
+        .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Smolr") {
+                    openAboutWindow()
+                }
+            }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates...") {
+                    checkForUpdates()
+                }
+                Divider()
+            }
+            
+            CommandGroup(replacing: .appSettings) {
+                SettingsLink {
+                    Text("Preferences...")
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
+        }
+        
+        
+        Settings {
+            PreferencesView()
+        }
+        
+    }
+    func openAboutWindow() {
+        let aboutWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 450, height: 550),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        aboutWindow.title = "About Smolr"
+        aboutWindow.contentView = NSHostingView(rootView: AboutWindowView())
+        aboutWindow.center()
+        aboutWindow.makeKeyAndOrderFront(nil)
+        aboutWindow.isReleasedWhenClosed = false
+        
+        NSApp.activate(ignoringOtherApps: true)
+    }
+    
+    func checkForUpdates() {
+        UpdateChecker.checkForUpdates { hasUpdate, newVersion, downloadURL in
+            if hasUpdate, let version = newVersion, let url = downloadURL {
+                let alert = NSAlert()
+                alert.messageText = "Update Available"
+                alert.informativeText = "Version \(version) is available. Would you like to download it?"
+                alert.addButton(withTitle: "Download")
+                alert.addButton(withTitle: "Later")
+                
+                if alert.runModal() == .alertFirstButtonReturn {
+                    NSWorkspace.shared.open(url)
+                }
+            } else {
+                let alert = NSAlert()
+                alert.messageText = "You're Up to Date"
+                alert.informativeText = "Smolr \(UpdateChecker.currentVersion) is the latest version."
+                alert.addButton(withTitle: "OK")
+                alert.runModal()
+            }
+        }
+    }
+}
