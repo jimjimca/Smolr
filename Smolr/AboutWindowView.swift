@@ -1,10 +1,7 @@
-//
-//  AboutWindowView.swift
-//  Smolr
-//
-//  Created by Jimmy Houle on 2026-01-17.
-//
-
+// Smolr
+// Copyright (c) 2026 Jimmy Houle
+// Licensed under BSD 3-Clause License
+// See README.md for third-party licenses
 import SwiftUI
 
 struct AboutWindowView: View {

@@ -1,10 +1,7 @@
-//
-//  UpdateChecker.swift
-//  Smolr
-//
-//  Created by Jimmy Houle on 2026-01-18.
-//
-
+// Smolr
+// Copyright (c) 2026 Jimmy Houle
+// Licensed under BSD 3-Clause License
+// See README.md for third-party licenses
 import Foundation
 
 struct VersionInfo: Codable, Sendable {

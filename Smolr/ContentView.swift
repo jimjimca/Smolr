@@ -1,10 +1,7 @@
-//
-//  ContentView.swift
-//  Smolr
-//
-//  Created by Jimmy Houle on 2026-01-13.
-//
-
+// Smolr
+// Copyright (c) 2026 Jimmy Houle
+// Licensed under BSD 3-Clause License
+// See README.md for third-party licenses
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
@@ -639,7 +636,7 @@ struct ContentView: View {
                             Spacer()
                             if totalOriginalBytes > 0 {
                                 if totalBytesSaved > 0 {
-                                    let percentage = Int((Double(totalBytesSaved) / Double(totalOriginalBytes)) * 100)
+                                    let percentage = (Double(totalBytesSaved) / Double(totalOriginalBytes)) * 100
                                     Text("Saved \(formatBytes(totalBytesSaved)) out of \(formatBytes(totalOriginalBytes)) (\(String(format: "%.1f",percentage)) %)")
                                         .font(.caption)
                                         .foregroundColor(.green)
