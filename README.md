@@ -19,10 +19,12 @@ Conversion to WebP, AVIF, and JXL.
 - All processing local - nothing leaves your machine
 - Self-contained - no Homebrew or external dependencies needed
 - Strips EXIF data during conversion
+- Preference settings (suffix, default quality, default format, etc.)
 
 ## Download
 
 **Free:** [GitHub Releases](https://github.com/jimjimca/Smolr/releases)
+
 **Support development:** [Official Website](https://smolr.io) (pay what you want, $0+ accepted)
 
 First launch: Right-click → Open (code not signed yet).

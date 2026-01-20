@@ -13,13 +13,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func application(_ application: NSApplication, open urls: [URL]) {
-        print("📂 Received \(urls.count) files")
         pendingURLs.append(contentsOf: urls)
         
         openTimer?.invalidate()
         openTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
             guard let self = self else { return }
-            print("✅ Opening \(self.pendingURLs.count) files")
             
             if NSApp.windows.isEmpty || NSApp.keyWindow == nil {
                 NSApp.activate(ignoringOtherApps: true)

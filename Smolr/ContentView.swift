@@ -233,7 +233,6 @@ struct ContentView: View {
     }
     
     func handleDrop(droppedItems: [NSItemProvider]) -> Bool {
-        print("Drop received with \(droppedItems.count) items")
         
         totalFilesToConvert = 0
         filesConverted = 0
@@ -247,10 +246,8 @@ struct ContentView: View {
                     return
                 }
                 
-                print("Successfully got URL: \(url.path)")
                 DispatchQueue.main.async {
                     droppedFiles.append(FileItem(url: url))
-                    print("File added, total files: \(droppedFiles.count)")
                     checkForOutputConflicts()
                     checkDiskSpace()
                 }
@@ -450,18 +447,16 @@ struct ContentView: View {
                 }
                 
                 if success {
-                    print("✓ Converted \(file.url.lastPathComponent) to \(outputURL.lastPathComponent)")
                     processedFiles.insert(file.id)
                     file.status = .done
                     filesConverted += 1
                     if let origSize = originalSize,
                        let newSize = getFileSize(url: outputURL) {
-                        print("📊 Original: \(origSize) bytes, New: \(newSize) bytes, Saved: \(origSize - newSize) bytes")
                         totalOriginalBytes += origSize
                         totalBytesSaved += (origSize - newSize)
                     }
                 } else {
-                    print("✗ Failed to convert \(file.url.lastPathComponent)")
+                    print("Failed to convert \(file.url.lastPathComponent)")
                     file.status = .failed
                     showErrorMessage("Failed to convert \(file.url.lastPathComponent)")
                 }
@@ -503,7 +498,6 @@ struct ContentView: View {
         var success = await commandClosure()
         
         if !success && targetFormat != "png" {
-            print("Direct conversion failed, trying via PNG intermediate...")
             success = await convertViaIntermediate(inputURL: inputURL, outputURL: outputURL)
         }
         
@@ -559,7 +553,7 @@ struct ContentView: View {
             }
         }
         
-        print("⚠️ Could not find bundled tool: \(tool)")
+        print("Could not find bundled tool: \(tool)")
         return nil
     }
     func toggleSelection(_ file: FileItem, multiSelect: Bool) {
@@ -813,7 +807,6 @@ struct ContentView: View {
         .onDrop(of: [.fileURL], isTargeted: $isTargeted, perform: handleDrop)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("OpenFiles"))) { notification in
             if let urls = notification.object as? [URL] {
-                print("🎯 Adding \(urls.count) files to list")
                 for url in urls {
                     droppedFiles.append(FileItem(url: url))
                 }
