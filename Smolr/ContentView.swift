@@ -385,12 +385,12 @@ struct ContentView: View {
                 if quality == 100 {
                     return await runCommand(
                         executable: cjxlPath,
-                        arguments: [inputPath, outputPath, "--lossless_jpeg=1", "--strip"]
+                        arguments: [inputPath, outputPath, "--lossless_jpeg=1"]
                     )
                 } else {
                     return await runCommand(
                         executable: cjxlPath,
-                        arguments: [inputPath, outputPath, "--lossless_jpeg=0", "-q", "\(quality)", "--strip"]
+                        arguments: [inputPath, outputPath, "--lossless_jpeg=0", "-q", "\(quality)"]
                     )
                 }
             }
