@@ -5,6 +5,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import Combine
+import OSLog
+
+
 
 class FileItem: Identifiable, Hashable, ObservableObject {
     let id = UUID()
@@ -242,23 +245,51 @@ struct ContentView: View {
             droppedItem.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
                 guard let data = item as? Data,
                       let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                    print("Failed to get URL: \(error?.localizedDescription ?? "unknown error")")
+                    
                     return
                 }
                 
                 DispatchQueue.main.async {
-                    droppedFiles.append(FileItem(url: url))
-                    checkForOutputConflicts()
-                    checkDiskSpace()
+                    self.addURLToDroppedFiles(url)
+                    
+                    self.checkForOutputConflicts()
+                    self.checkDiskSpace()
                 }
             }
         }
         return true
     }
+    func enumerateImagesInDirectory(_ directory: URL) {
+        let fileManager = FileManager.default
+        
+        guard let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return
+        }
+        
+        var foundFiles: [FileItem] = []
+        
+        for case let fileURL as URL in enumerator {
+            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey]),
+                  let isRegularFile = resourceValues.isRegularFile,
+                  isRegularFile else {
+                continue
+            }
+            
+            if ImageValidator.isImageFile(fileURL) {
+                foundFiles.append(FileItem(url: fileURL))
+            }
+        }
+        
+        droppedFiles.append(contentsOf: foundFiles)
+    }
     func openFilePicker() {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = false
+        panel.canChooseDirectories = true
         
         panel.begin { response in
             if response == .OK {
@@ -267,13 +298,17 @@ struct ContentView: View {
                 errorMessages.removeAll()
                 
                 DispatchQueue.main.async {
-                    droppedFiles.append(contentsOf: panel.urls.map { FileItem(url: $0) })
-                    checkForOutputConflicts()
-                    checkDiskSpace()
+                    for url in panel.urls {
+                        self.addURLToDroppedFiles(url)
+                    }
+                    
+                    self.checkForOutputConflicts()
+                    self.checkDiskSpace()
                 }
             }
         }
     }
+    
     func buildOutputURL(for inputURL: URL) -> URL {
         let directory = inputURL.deletingLastPathComponent()
         let filename = inputURL.deletingPathExtension().lastPathComponent
@@ -312,7 +347,6 @@ struct ContentView: View {
 
                     )
                     if !success {
-                        print("pngquant failed for \(inputPath), using oxipng fallback")
                         success = await runCommand(
                             executable: oxipngPath,
                             arguments: ["-o", "max", "--strip", "all", inputPath, "--out", outputPath]
@@ -456,7 +490,7 @@ struct ContentView: View {
                         totalBytesSaved += (origSize - newSize)
                     }
                 } else {
-                    print("Failed to convert \(file.url.lastPathComponent)")
+                    
                     file.status = .failed
                     showErrorMessage("Failed to convert \(file.url.lastPathComponent)")
                 }
@@ -477,7 +511,8 @@ struct ContentView: View {
             do {
                 try process.run()
             } catch {
-                print("Failed to run command: \(error)")
+                
+
                 continuation.resume(returning: false)
             }
         }
@@ -488,18 +523,18 @@ struct ContentView: View {
         
         let targetFormat = outputFormat == "original" ? inputURL.pathExtension.lowercased() : outputFormat.lowercased()
         
+      
         guard let commandClosure = getEncodingCommand(for: targetFormat, inputPath: inputPath, outputPath: outputPath, quality: quality) else {
-            await MainActor.run {
-                showErrorMessage("Unsupported format: \(targetFormat)")
+                await MainActor.run {
+                    showErrorMessage("Unsupported format: \(targetFormat)")
+                }
+                return false
             }
-            return false
-        }
-        
         var success = await commandClosure()
         
         if !success && targetFormat != "png" {
-            success = await convertViaIntermediate(inputURL: inputURL, outputURL: outputURL)
-        }
+                success = await convertViaIntermediate(inputURL: inputURL, outputURL: outputURL)
+            }
         
         return success
     }
@@ -553,7 +588,6 @@ struct ContentView: View {
             }
         }
         
-        print("Could not find bundled tool: \(tool)")
         return nil
     }
     func toggleSelection(_ file: FileItem, multiSelect: Bool) {
@@ -567,7 +601,17 @@ struct ContentView: View {
             selectedFiles = [file]
         }
     }
-    
+    func addURLToDroppedFiles(_ url: URL) {
+        var isDirectory: ObjCBool = false
+        
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            if isDirectory.boolValue {
+                enumerateImagesInDirectory(url)
+            } else {
+                droppedFiles.append(FileItem(url: url))
+            }
+        }
+    }
     var body: some View {
         VStack {
             if droppedFiles.isEmpty {

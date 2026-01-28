@@ -10,6 +10,11 @@ Drop in your images, choose a format (or keep the original), adjust quality, and
 Optimisation with PNG, JPEG, GIF, WebP, AVIF, and JXL.
 Conversion to WebP, AVIF, and JXL.
 
+## Requirements
+
+- macOS 14.0 (Sonoma) or later
+- Works natively on both Apple Silicon (M1/M2/M3/M4) and Intel Macs
+
 ## Features
 
 - Convert between WebP, AVIF, JXL, PNG, JPEG, GIF
@@ -27,7 +32,13 @@ Conversion to WebP, AVIF, and JXL.
 
 **Support development:** [Official Website](https://smolr.io) (pay what you want, $0+ accepted)
 
-First launch: Right-click → Open (code not signed yet).
+Since the app code is not yet signed, on the fisrt launch you might need to do the following : 
+1. Drag Smolr.app into your Applications folder.
+2. If you see the message: “Smolr.app can’t be opened because it was not downloaded from the App Store.” click OK.
+3. Open System Settings → Privacy & Security.
+4. Scroll to the bottom where you’ll see: “Smolr.app was blocked to protect your Mac.”
+5. Click Open Anyway.
+6. If prompted with “Smolr.app is not from the App Store. Are you sure you want to open it?”, click Open.
 
 ## Building
 
@@ -47,13 +58,12 @@ All encoding tools and libraries are included in the repo.
 - `⌘ D` - Deselect all
 - `Delete` - Remove selected files
 
-## More Infos
+## Technical Details
 
-Smolr bundles many encoding/decoding tools (see credits below). 
-All dependencies (29 dylibs) are included within the app bundle. 
-No system dependencies required.
+Smolr bundles many encoding/decoding tools (see credits below) as universal binaries, ensuring native performance on both Apple Silicon and Intel Macs. All dependencies (29 dylibs + 12 tools) are included within the app bundle. No system dependencies required.
 
 When converting between incompatible formats (e.g., JXL → WebP), files are decoded to PNG then re-encoded. This causes some generation loss - use original source files when possible.
+
 
 ## Credits / Third-Party Libraries
 
