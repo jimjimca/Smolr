@@ -10,17 +10,52 @@ struct PreferencesView: View {
     @AppStorage("fileSuffix") private var fileSuffix = "_smolr"
     @AppStorage("hideWarnings") private var hideWarnings = false
     @AppStorage("accentColor") private var accentColorName = "blue"
+    @AppStorage("enabledFormats") private var enabledFormatsString = FormatConfig.defaultEnabledFormats
+    
+    private var enabledFormats: Set<String> {
+        get {
+            Set(enabledFormatsString.split(separator: ",").map { String($0) })
+        }
+    }
+
+    private func toggleFormat(_ format: String) {
+        var formats = enabledFormats
+        if formats.contains(format) {
+            if format == defaultFormat {
+                return
+            }
+            formats.remove(format)
+        } else {
+            formats.insert(format)
+        }
+        enabledFormatsString = formats.sorted().joined(separator: ",")
+    }
+
+    private func isFormatEnabled(_ format: String) -> Bool {
+        enabledFormats.contains(format)
+    }
+
+    private func ensureDefaultFormatEnabled() {
+        var formats = enabledFormats
+        if !formats.contains(defaultFormat) {
+            formats.insert(defaultFormat)
+            enabledFormatsString = formats.sorted().joined(separator: ",")
+        }
+    }
     
     var body: some View {
         Form {
             Section("Default Conversion Settings") {
                 Picker("Default Format:", selection: $defaultFormat) {
-                    Text("Original").tag("original")
-                    Text("WebP").tag("webp")
-                    Text("AVIF").tag("avif")
-                    Text("JXL").tag("jxl")
+                    ForEach(FormatConfig.allFormats, id: \.self) { format in
+                        Text(FormatConfig.displayName(for: format)).tag(format)
+                    }
                 }
                 .pickerStyle(.menu)
+                .onChange(of: defaultFormat) { _, _ in
+                    ensureDefaultFormatEnabled()
+                }
+
                 
                 HStack {
                     Text("Default Quality:")
@@ -31,6 +66,37 @@ struct PreferencesView: View {
                     Text("\(defaultQuality)%")
                         .frame(width: 45)
                 }
+            }
+            
+            Section("Available Formats") {
+                ForEach(Array(stride(from: 1, to: FormatConfig.allFormats.count, by: 2)), id: \.self) { index in
+                    HStack(spacing: 32) {
+                        let format1 = FormatConfig.allFormats[index]
+                        Toggle(FormatConfig.displayName(for: format1), isOn: Binding(
+                            get: { isFormatEnabled(format1) },
+                            set: { _ in toggleFormat(format1) }
+                        ))
+                        .disabled(defaultFormat == format1)
+                        
+                        if index + 1 < FormatConfig.allFormats.count {
+                            let format2 = FormatConfig.allFormats[index + 1]
+                            Toggle(FormatConfig.displayName(for: format2), isOn: Binding(
+                                get: { isFormatEnabled(format2) },
+                                set: { _ in toggleFormat(format2) }
+                            ))
+                            .disabled(defaultFormat == format2)
+                        }
+                    }
+                }
+                Toggle("Original (keep source format)", isOn: Binding(
+                    get: { isFormatEnabled("original") },
+                    set: { _ in toggleFormat("original") }
+                ))
+                .disabled(defaultFormat == "original")
+                
+                Text("Select formats to be displayed on the format picker. The default format is always enabled.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
             }
             
             Section("File Naming") {
@@ -51,6 +117,9 @@ struct PreferencesView: View {
                     Text("Green").tag("green")
                 }
                 .pickerStyle(.menu)
+                .onChange(of: defaultFormat) { _, _ in
+                    ensureDefaultFormatEnabled()
+                }
             }
         }
         .formStyle(.grouped)

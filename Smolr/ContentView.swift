@@ -145,11 +145,13 @@ struct FileItemRow: View {
 
 struct ContentView: View {
     
-    @AppStorage("defaultFormat") private var outputFormat = "original"
+    @AppStorage("defaultFormat") private var defaultFormat = "original"
+    @State private var outputFormat = "original"
     @AppStorage("defaultQuality") private var quality = 85
     @AppStorage("fileSuffix") private var fileSuffix = "_smolr"
     @AppStorage("hideWarnings") private var hideWarnings = false
     @AppStorage("accentColor") private var accentColorName = "blue"
+    @AppStorage("enabledFormats") private var enabledFormatsString = FormatConfig.defaultEnabledFormats
     
     private var accentColor: Color {
         switch accentColorName {
@@ -159,6 +161,10 @@ struct ContentView: View {
         case "green": return .green
         default: return .blue
         }
+    }
+    private var enabledFormats: [String] {
+        let formats = enabledFormatsString.split(separator: ",").map { String($0) }
+        return FormatConfig.sortedFormats(formats)
     }
     
     @State private var droppedFiles: [FileItem] = []
@@ -187,7 +193,16 @@ struct ContentView: View {
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         return formatter.string(fromByteCount: bytes)
     }
-    
+    func calculatePickerWidth() -> CGFloat {
+        let baseWidth: CGFloat = 40
+        let charWidth: CGFloat = 10
+        
+        let totalChars = enabledFormats.reduce(0) { total, format in
+            total + FormatConfig.displayName(for: format).count
+        }
+        
+        return baseWidth + CGFloat(totalChars) * charWidth
+    }
     func showErrorMessage(_ message: String) {
         errorMessages.append(message)
     }
@@ -504,15 +519,23 @@ struct ContentView: View {
             process.executableURL = URL(fileURLWithPath: executable)
             process.arguments = arguments
             
+            let errorPipe = Pipe()
+            process.standardError = errorPipe
+            
             process.terminationHandler = { process in
+                if process.terminationStatus != 0 {
+                    let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                    if let errorString = String(data: errorData, encoding: .utf8) {
+                        SmolrLogger.conversion.error("Command failed with status \(process.terminationStatus): \(errorString, privacy: .public)")
+                    }
+                }
                 continuation.resume(returning: process.terminationStatus == 0)
             }
             
             do {
                 try process.run()
             } catch {
-                
-
+                SmolrLogger.conversion.error("Failed to run command: \(error.localizedDescription, privacy: .public)")
                 continuation.resume(returning: false)
             }
         }
@@ -587,7 +610,6 @@ struct ContentView: View {
                 return toolPath
             }
         }
-        
         return nil
     }
     func toggleSelection(_ file: FileItem, multiSelect: Bool) {
@@ -781,14 +803,26 @@ struct ContentView: View {
                         Spacer()
                         
                         HStack(spacing: 16) {
-                            Picker("", selection: $outputFormat) {
-                                Text("Original").tag("original")
-                                Text("WebP").tag("webp")
-                                Text("AVIF").tag("avif")
-                                Text("JXL").tag("jxl")
+                            Group {
+                                if enabledFormats.count <= 4 {
+                                    Picker("", selection: $outputFormat) {
+                                        ForEach(enabledFormats, id: \.self) { format in
+                                            Text(FormatConfig.displayName(for: format)).tag(format)
+                                        }
+                                    }
+                                    .pickerStyle(.segmented)
+                                    .frame(width: calculatePickerWidth())
+                                } else {
+                                    Picker("", selection: $outputFormat) {
+                                        ForEach(enabledFormats, id: \.self) { format in
+                                            Text(FormatConfig.displayName(for: format)).tag(format)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 120)
+                                }
+                                
                             }
-                            .pickerStyle(.segmented)
-                            .frame(width: 200)
                             .onChange(of: outputFormat) { _, _ in
                                 checkForOutputConflicts()
                             }
@@ -857,6 +891,9 @@ struct ContentView: View {
                 checkForOutputConflicts()
                 checkDiskSpace()
             }
+        }
+        .onAppear {
+            outputFormat = defaultFormat
         }
         .frame(minWidth: 650, minHeight: 300)
         

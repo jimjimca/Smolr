@@ -66,6 +66,7 @@
 			buildPhases = (
 				1979C91D2F163C0700D794C1 /* Sources */,
 				1979C91F2F163C0700D794C1 /* Resources */,
+				19E6D7EA2F2ACF8D00D438F9 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -126,6 +127,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		19E6D7EA2F2ACF8D00D438F9 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "#!/bin/bash\n\nRESOURCES=\"${BUILT_PRODUCTS_DIR}/${PRODUCT_NAME}.app/Contents/Resources\"\n\necho \"Signing tools and libraries...\"\n\n# Sign libraries\nif [ -d \"${RESOURCES}/Libraries\" ]; then\n    for lib in \"${RESOURCES}\"/Libraries/*.dylib; do\n        [ -f \"$lib\" ] && codesign --force --sign - \"$lib\" 2>/dev/null\n    done\nfi\n\n# Sign tools\nif [ -d \"${RESOURCES}/Tools\" ]; then\n    for tool in \"${RESOURCES}\"/Tools/*; do\n        [ -x \"$tool\" ] && codesign --force --sign - \"$tool\" 2>/dev/null\n    done\nfi\n\necho \"Done signing binaries\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		1979C91D2F163C0700D794C1 /* Sources */ = {

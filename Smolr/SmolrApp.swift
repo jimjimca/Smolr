@@ -56,12 +56,7 @@ struct SmolrApp: App {
                 Divider()
             }
             
-            CommandGroup(replacing: .appSettings) {
-                SettingsLink {
-                    Text("Preferences...")
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
+            
         }
         
         
