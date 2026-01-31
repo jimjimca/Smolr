@@ -4,6 +4,9 @@
 // See README.md for third-party licenses
 import SwiftUI
 
+
+// MARK: - App Delegate
+
 class AppDelegate: NSObject, NSApplicationDelegate {
     var pendingURLs: [URL] = []
     var openTimer: Timer?
@@ -32,12 +35,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+
+// MARK: - Main App
+
 @main
 struct SmolrApp: App {
+    
+    
+    // MARK: App Delegate Bridge
+    
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
     }
+    
+    
+    // MARK: Scene Definition
+    
     var body: some Scene {
         Window("Smolr", id: "main") {
             ContentView()
@@ -56,12 +70,7 @@ struct SmolrApp: App {
                 Divider()
             }
             
-            CommandGroup(replacing: .appSettings) {
-                SettingsLink {
-                    Text("Preferences...")
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
+            
         }
         
         
@@ -70,6 +79,10 @@ struct SmolrApp: App {
         }
         
     }
+    
+    
+    // MARK: App Commands
+    
     func openAboutWindow() {
         let aboutWindow = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 450, height: 550),
