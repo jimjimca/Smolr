@@ -8,7 +8,7 @@ Supports modern formats like WebP, AVIF, and JPEG XL.
 Drop in your images, choose a format (or keep the original), adjust quality, and convert. That's it.
 
 Optimisation with PNG, JPEG, GIF, WebP, AVIF, and JXL.
-Conversion to WebP, AVIF, and JXL.
+Conversion to WebP, AVIF, JXL, PNG, and JPEG.
 
 ## Requirements
 
@@ -19,12 +19,44 @@ Conversion to WebP, AVIF, and JXL.
 
 - Convert between WebP, AVIF, JXL, PNG, JPEG, GIF
 - Optimize files without format conversion
+- Drag and drop individual files or entire folders
 - Batch process multiple images
 - Quality slider (50-100%)
+- Optimization profiles: Fast, Balanced, Quality, Size
 - All processing local - nothing leaves your machine
 - Self-contained - no Homebrew or external dependencies needed
 - Strips EXIF data during conversion
-- Preference settings (suffix, default quality, default format, etc.)
+- Preference settings (suffix, default quality, default format, optimization profile, etc.)
+
+## Usage
+
+### Converting and optimizing
+
+1. Drop your images or a folder into Smolr
+2. Choose a target format from the picker at the bottom (or keep "Original" to optimize without converting)
+3. Adjust the quality slider (50–100%)
+4. Click **Get Smolr** (or press `⌘ Return`)
+
+Output files are saved next to the originals with a configurable suffix (default: `_smolr`).
+
+### Optimization Profiles
+
+Smolr includes four optimization profiles that control how aggressively each encoder processes your images. Select your profile in **Settings → Optimization Profile**.
+
+**Fast** | Fastest | Quick processing with basic optimization. Best for previews or when speed matters most.
+**Balanced** | Default | Good balance between speed and compression. Recommended for most use cases.
+**Quality** | Slower | Maximizes visual quality. Encoders run at highest effort — expect noticeably longer processing times.
+**Size** | Slower | Minimizes file size. Most aggressive compression settings. Strips all metadata.
+
+The **Quality** and **Size** profiles can be 10–20× slower than **Fast**, especially on large files.
+
+The quality slider (50–100%) is always respected regardless of profile. Profiles tune the *encoding parameters*, not the quality level.
+
+### Customizing the format picker
+
+By default, Smolr shows **Original, WebP, AVIF, and JXL** in the format picker. You can customize which formats are available in settings (**Default Format**).
+
+You can also enable **PNG** and **JPEG** as conversion targets this way, not just as optimization formats.
 
 ## Download
 
@@ -62,7 +94,7 @@ All encoding tools and libraries are included in the repo.
 
 Smolr bundles many encoding/decoding tools (see credits below) as universal binaries, ensuring native performance on both Apple Silicon and Intel Macs. All dependencies (29 dylibs + 12 tools) are included within the app bundle. No system dependencies required.
 
-When converting between incompatible formats (e.g., JXL → WebP), files are decoded to PNG then re-encoded. This causes some generation loss - use original source files when possible.
+GIF is supported for optimization only. Conversion *to* GIF from other formats is not supported.
 
 
 ## Credits / Third-Party Libraries

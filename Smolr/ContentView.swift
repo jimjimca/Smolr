@@ -8,6 +8,7 @@ import Combine
 import OSLog
 
 
+// MARK: - Supporting Types
 
 class FileItem: Identifiable, Hashable, ObservableObject {
     let id = UUID()
@@ -26,6 +27,7 @@ class FileItem: Identifiable, Hashable, ObservableObject {
         lhs.id == rhs.id
     }
 }
+
 enum ConversionStatus {
     case notStarted
     case waiting
@@ -45,6 +47,7 @@ enum ConversionStatus {
         }
     }
 }
+
 struct ImageValidator {
     static let imageExtensions = ["png", "jpg", "jpeg", "tiff", "tif", "bmp", "gif", "heic", "webp", "avif", "jxl"]
     
@@ -53,10 +56,14 @@ struct ImageValidator {
     }
 }
 
+
+// MARK: - Status Icon View
+
 struct StatusIconView: View {
     let status: ConversionStatus
     let accentColor: Color
     @State private var isRotating = false
+    
     
     var body: some View {
         Group {
@@ -94,6 +101,9 @@ struct StatusIconView: View {
         .help(status.description)
     }
 }
+
+
+// MARK: - File Item Row
 
 struct FileItemRow: View {
     @ObservedObject var file: FileItem
@@ -143,8 +153,15 @@ struct FileItemRow: View {
     }
 }
 
+
+// MARK: - Content View
+
 struct ContentView: View {
     
+    
+    // MARK: - Properties
+        
+    // App Storage
     @AppStorage("defaultFormat") private var defaultFormat = "original"
     @State private var outputFormat = "original"
     @AppStorage("defaultQuality") private var quality = 85
@@ -152,20 +169,9 @@ struct ContentView: View {
     @AppStorage("hideWarnings") private var hideWarnings = false
     @AppStorage("accentColor") private var accentColorName = "blue"
     @AppStorage("enabledFormats") private var enabledFormatsString = FormatConfig.defaultEnabledFormats
+    @AppStorage("optimizationProfile") private var optimizationProfileRaw = OptimizationProfile.balanced.rawValue
     
-    private var accentColor: Color {
-        switch accentColorName {
-        case "purple": return .purple
-        case "pink": return Color(red: 1.0, green: 0.4, blue: 0.8)
-        case "orange": return .orange
-        case "green": return .green
-        default: return .blue
-        }
-    }
-    private var enabledFormats: [String] {
-        let formats = enabledFormatsString.split(separator: ",").map { String($0) }
-        return FormatConfig.sortedFormats(formats)
-    }
+    // State
     
     @State private var droppedFiles: [FileItem] = []
     @State private var isTargeted = false
@@ -180,6 +186,30 @@ struct ContentView: View {
     @State private var totalBytesSaved: Int64 = 0
     @State private var totalOriginalBytes: Int64 = 0
     
+    // Computed Properties
+    
+    private var accentColor: Color {
+        switch accentColorName {
+        case "purple": return .purple
+        case "pink": return Color(red: 1.0, green: 0.4, blue: 0.8)
+        case "orange": return .orange
+        case "green": return .green
+        default: return .blue
+        }
+    }
+    
+    private var optimizationProfile: OptimizationProfile {
+        OptimizationProfile(rawValue: optimizationProfileRaw) ?? .balanced
+    }
+    
+    private var enabledFormats: [String] {
+        let formats = enabledFormatsString.split(separator: ",").map { String($0) }
+        return FormatConfig.sortedFormats(formats)
+    }
+    
+    
+    // MARK: - Helper Functions
+    
     func getFileSize(url: URL) -> Int64? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
               let fileSize = attributes[.size] as? Int64 else {
@@ -187,12 +217,14 @@ struct ContentView: View {
         }
         return fileSize
     }
+    
     func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         return formatter.string(fromByteCount: bytes)
     }
+    
     func calculatePickerWidth() -> CGFloat {
         let baseWidth: CGFloat = 40
         let charWidth: CGFloat = 10
@@ -203,52 +235,69 @@ struct ContentView: View {
         
         return baseWidth + CGFloat(totalChars) * charWidth
     }
-    func showErrorMessage(_ message: String) {
-        errorMessages.append(message)
+    
+    func getBundledToolPath(for tool: String) -> String? {
+        if let resourcePath = Bundle.main.resourcePath {
+            let toolPath = (resourcePath as NSString).appendingPathComponent("Tools/\(tool)")
+            if FileManager.default.fileExists(atPath: toolPath) {
+                return toolPath
+            }
+        }
+        return nil
     }
-    func showWarningMessage(_ message: String) {
-        if !warningMessages.contains(message) {
-            warningMessages.append(message)
+    
+    func buildOutputURL(for inputURL: URL) -> URL {
+        let directory = inputURL.deletingLastPathComponent()
+        let filename = inputURL.deletingPathExtension().lastPathComponent
+        let inputExt = inputURL.pathExtension
+        
+        let outputExt = outputFormat == "original" ? inputExt : outputFormat
+        
+        let newFilename = "\(filename)\(fileSuffix).\(outputExt)"
+        
+        return directory.appendingPathComponent(newFilename)
+    }
+    
+    
+    // MARK: - UI Interaction
+    
+    func toggleSelection(_ file: FileItem, multiSelect: Bool) {
+        if multiSelect {
+            if selectedFiles.contains(file) {
+                selectedFiles.remove(file)
+            } else {
+                selectedFiles.insert(file)
+            }
+        } else {
+            selectedFiles = [file]
         }
     }
     
-    func checkForOutputConflicts() {
-        var hasConflicts = false
+    func openFilePicker() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = true
         
-        for file in droppedFiles {
-            guard ImageValidator.isImageFile(file.url), !processedFiles.contains(file.id) else { continue }
-            
-            let outputURL = buildOutputURL(for: file.url)
-            if FileManager.default.fileExists(atPath: outputURL.path) {
-                file.status = .warning("Existing output file will be overwritten")
-                hasConflicts = true
-            } else if case .warning = file.status {
-                file.status = .notStarted
-            }
-        }
-        
-        warningMessages.removeAll { $0.contains("will be overwritten") }
-        if hasConflicts {
-            showWarningMessage("Some files will be overwritten")
-        }
-    }
-    func checkFilePermissions(inputURL: URL, outputURL: URL) -> (canRead: Bool, canWrite: Bool) {
-        let canRead = FileManager.default.isReadableFile(atPath: inputURL.path)
-        let outputDir = outputURL.deletingLastPathComponent()
-        let canWrite = FileManager.default.isWritableFile(atPath: outputDir.path)
-        
-        return (canRead, canWrite)
-    }
-
-    func checkDiskSpace() {
-        if let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
-            let freeSize = attributes[.systemFreeSize] as? Int64 {
-            let freeGB = Double(freeSize) / 1_000_000_000
-                if freeGB < 1.0 {  // Less than 1GB free
-                    showWarningMessage("Low disk space (\(String(format: "%.1f", freeGB))GB free)")
+        panel.begin { response in
+            if response == .OK {
+                totalFilesToConvert = 0
+                filesConverted = 0
+                errorMessages.removeAll()
+                
+                DispatchQueue.main.async {
+                    for url in panel.urls {
+                        self.addURLToDroppedFiles(url)
+                    }
+                    
+                    self.checkForOutputConflicts()
+                    self.checkDiskSpace()
                 }
             }
+        }
     }
+    
+    
+    // MARK: - File Management
     
     func handleDrop(droppedItems: [NSItemProvider]) -> Bool {
         
@@ -274,6 +323,19 @@ struct ContentView: View {
         }
         return true
     }
+    
+    func addURLToDroppedFiles(_ url: URL) {
+        var isDirectory: ObjCBool = false
+        
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            if isDirectory.boolValue {
+                enumerateImagesInDirectory(url)
+            } else {
+                droppedFiles.append(FileItem(url: url))
+            }
+        }
+    }
+    
     func enumerateImagesInDirectory(_ directory: URL) {
         let fileManager = FileManager.default
         
@@ -301,160 +363,71 @@ struct ContentView: View {
         
         droppedFiles.append(contentsOf: foundFiles)
     }
-    func openFilePicker() {
-        let panel = NSOpenPanel()
-        panel.allowsMultipleSelection = true
-        panel.canChooseDirectories = true
-        
-        panel.begin { response in
-            if response == .OK {
-                totalFilesToConvert = 0
-                filesConverted = 0
-                errorMessages.removeAll()
-                
-                DispatchQueue.main.async {
-                    for url in panel.urls {
-                        self.addURLToDroppedFiles(url)
-                    }
-                    
-                    self.checkForOutputConflicts()
-                    self.checkDiskSpace()
-                }
-            }
+    
+    
+    // MARK: - Validation & Warnings
+    
+    func showErrorMessage(_ message: String) {
+        errorMessages.append(message)
+    }
+    
+    func showWarningMessage(_ message: String) {
+        if !warningMessages.contains(message) {
+            warningMessages.append(message)
         }
     }
     
-    func buildOutputURL(for inputURL: URL) -> URL {
-        let directory = inputURL.deletingLastPathComponent()
-        let filename = inputURL.deletingPathExtension().lastPathComponent
-        let inputExt = inputURL.pathExtension
+    func checkForOutputConflicts() {
+        var hasConflicts = false
         
-        let outputExt = outputFormat == "original" ? inputExt : outputFormat
+        for file in droppedFiles {
+            guard ImageValidator.isImageFile(file.url), !processedFiles.contains(file.id) else { continue }
+            
+            let outputURL = buildOutputURL(for: file.url)
+            if FileManager.default.fileExists(atPath: outputURL.path) {
+                file.status = .warning("Existing output file will be overwritten")
+                hasConflicts = true
+            } else if case .warning = file.status {
+                file.status = .notStarted
+            }
+        }
         
-        let newFilename = "\(filename)\(fileSuffix).\(outputExt)"
-        
-        return directory.appendingPathComponent(newFilename)
-    }
-    func getEncodingCommand(
-        for format: String,
-        inputPath: String,
-        outputPath: String,
-        quality: Int
-    ) -> (() async -> Bool)? {
-        
-        switch format.lowercased() {
-        case "png":
-            if quality == 100 {
-                guard let oxipngPath = getBundledToolPath(for: "oxipng") else { return nil }
-                return {
-                    await runCommand(
-                        executable: oxipngPath,
-                        arguments: ["-o", "max", "--strip", "safe", inputPath, "--out", outputPath]
-                    )
-                }
-            } else {
-                guard let pngquantPath = getBundledToolPath(for: "pngquant"),
-                      let oxipngPath = getBundledToolPath(for: "oxipng") else { return nil }
-                return {
-                    var success = await runCommand(
-                        executable: pngquantPath,
-                        arguments: ["--quality", "\(quality)-\(quality)", "--force", "--strip", "--output", outputPath, inputPath]
-
-                    )
-                    if !success {
-                        success = await runCommand(
-                            executable: oxipngPath,
-                            arguments: ["-o", "max", "--strip", "all", inputPath, "--out", outputPath]
-                        )
-                    }
-                    return success
-                }
-            }
-        case "jpg", "jpeg":
-            if quality == 100 {
-                guard let jpegtranPath = getBundledToolPath(for: "jpegtran") else { return nil }
-                return {
-                    await runCommand(
-                        executable: jpegtranPath,
-                        arguments: ["-copy", "none", "-optimize", "-outfile", outputPath, inputPath]
-                    )
-                }
-            } else {
-                guard let djpegPath = getBundledToolPath(for: "djpeg"),
-                      let cjpegPath = getBundledToolPath(for: "cjpeg") else { return nil }
-                return {
-                    let tempPPM = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".ppm")
-                    
-                    let decodeSuccess = await runCommand(
-                        executable: djpegPath,
-                        arguments: ["-outfile", tempPPM.path, inputPath]
-                    )
-                    
-                    guard decodeSuccess else {
-                        try? FileManager.default.removeItem(at: tempPPM)
-                        return false
-                    }
-                    
-                    let encodeSuccess = await runCommand(
-                        executable: cjpegPath,
-                        arguments: ["-quality", "\(quality)", "-outfile", outputPath, tempPPM.path]
-                    )
-                    
-                    try? FileManager.default.removeItem(at: tempPPM)
-                    return encodeSuccess
-                }
-            }
-        case "gif":
-            guard let gifsiclePath = getBundledToolPath(for: "gifsicle") else { return nil }
-            return {
-                await runCommand(
-                    executable: gifsiclePath,
-                    arguments: ["-O3", "--lossy=\(100-quality)", "-o", outputPath, inputPath]
-                )
-            }
-        case "webp":
-            guard let cwebpPath = getBundledToolPath(for: "cwebp") else { return nil }
-            return {
-                await runCommand(
-                    executable: cwebpPath,
-                    arguments: ["-q", "\(quality)", "-metadata", "none", inputPath, "-o", outputPath]
-                )
-            }
-        case "avif":
-            guard let avifencPath = getBundledToolPath(for: "avifenc") else { return nil }
-            return {
-                await runCommand(
-                    executable: avifencPath,
-                    arguments: ["-s", "4", "-q", "\(quality)", "--ignore-exif", "--ignore-xmp", inputPath, outputPath]
-                )
-            }
-        case "jxl":
-            guard let cjxlPath = getBundledToolPath(for: "cjxl") else { return nil }
-            return {
-                if quality == 100 {
-                    return await runCommand(
-                        executable: cjxlPath,
-                        arguments: [inputPath, outputPath, "--lossless_jpeg=1"]
-                    )
-                } else {
-                    return await runCommand(
-                        executable: cjxlPath,
-                        arguments: [inputPath, outputPath, "--lossless_jpeg=0", "-q", "\(quality)"]
-                    )
-                }
-            }
-        default:
-            return nil
+        warningMessages.removeAll { $0.contains("will be overwritten") }
+        if hasConflicts {
+            showWarningMessage("Some files will be overwritten")
         }
     }
+    
+    func checkFilePermissions(inputURL: URL, outputURL: URL) -> (canRead: Bool, canWrite: Bool) {
+        let canRead = FileManager.default.isReadableFile(atPath: inputURL.path)
+        let outputDir = outputURL.deletingLastPathComponent()
+        let canWrite = FileManager.default.isWritableFile(atPath: outputDir.path)
+        
+        return (canRead, canWrite)
+    }
 
+    func checkDiskSpace() {
+        if let attributes = try? FileManager.default.attributesOfFileSystem(forPath: NSHomeDirectory()),
+            let freeSize = attributes[.systemFreeSize] as? Int64 {
+            let freeGB = Double(freeSize) / 1_000_000_000
+                if freeGB < 1.0 {  // Less than 1GB free
+                    showWarningMessage("Low disk space (\(String(format: "%.1f", freeGB))GB free)")
+                }
+            }
+    }
+    
+    
+    // MARK: - Conversion Logic
+    
     func convertFiles() {
         conversionTask = Task {
+            warningMessages.removeAll()
             let filesToConvert = droppedFiles.filter { ImageValidator.isImageFile($0.url) && !processedFiles.contains($0.id) }
             totalFilesToConvert = filesToConvert.count
             filesConverted = 0
             totalBytesSaved = 0
             totalOriginalBytes = 0
+
             
             for file in droppedFiles {
                 if ImageValidator.isImageFile(file.url) && !processedFiles.contains(file.id) {
@@ -473,8 +446,8 @@ struct ContentView: View {
                 
                 file.status = .converting
                 
+                let startTime = Date()
                 let outputURL = buildOutputURL(for: file.url)
-                
                 let originalSize = getFileSize(url: file.url)
                 
                 let permissions = checkFilePermissions(inputURL: file.url, outputURL: outputURL)
@@ -496,9 +469,11 @@ struct ContentView: View {
                 }
                 
                 if success {
+                    let duration = Date().timeIntervalSince(startTime)
                     processedFiles.insert(file.id)
                     file.status = .done
                     filesConverted += 1
+                    SmolrLogger.conversion.info("✓ Converted \(file.url.lastPathComponent) in \(String(format: "%.2f", duration))s")
                     if let origSize = originalSize,
                        let newSize = getFileSize(url: outputURL) {
                         totalOriginalBytes += origSize
@@ -513,6 +488,175 @@ struct ContentView: View {
             warningMessages.removeAll { $0.contains("will be overwritten") }
         }
     }
+    
+    func convertFile(inputURL: URL, outputURL: URL) async -> Bool {
+        let inputExt = inputURL.pathExtension.lowercased()
+        let targetFormat = outputFormat == "original" ? inputExt : outputFormat.lowercased()
+        
+        SmolrLogger.conversion.debug("Converting \(inputURL.lastPathComponent) (\(inputExt)) to \(targetFormat)")
+        
+        if inputExt == targetFormat {
+            guard let commandClosure = getEncodingCommand(for: targetFormat, inputPath: inputURL.path, outputPath: outputURL.path, quality: quality) else {
+                SmolrLogger.conversion.error("No encoder for \(targetFormat)")
+                return false
+            }
+            return await commandClosure()
+        }
+        
+        return await convertViaIntermediate(inputURL: inputURL, outputURL: outputURL)
+    }
+    
+    func convertViaIntermediate(inputURL: URL, outputURL: URL) async -> Bool {
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
+        
+        SmolrLogger.conversion.debug("convertViaIntermediate: Decoding \(inputURL.lastPathComponent) to temp PNG")
+        let decodeSuccess = await decodeToFormat(inputURL: inputURL, outputPath: tempURL.path)
+        SmolrLogger.conversion.debug("Decode result: \(decodeSuccess)")
+        
+        guard decodeSuccess else {
+            SmolrLogger.conversion.error("Failed to decode \(inputURL.lastPathComponent)")
+            return false
+        }
+        
+        let targetFormat = outputFormat == "original" ? outputURL.pathExtension.lowercased() : outputFormat.lowercased()
+        
+        SmolrLogger.conversion.debug("Now encoding temp PNG to \(targetFormat)")
+        guard let commandClosure = getEncodingCommand(for: targetFormat, inputPath: tempURL.path, outputPath: outputURL.path, quality: quality) else {
+            SmolrLogger.conversion.error("No encoding command for format: \(targetFormat)")
+            try? FileManager.default.removeItem(at: tempURL)
+            return false
+        }
+        
+        let success = await commandClosure()
+        SmolrLogger.conversion.debug("Encode result: \(success)")
+        try? FileManager.default.removeItem(at: tempURL)
+        return success
+    }
+    
+    
+    // MARK: - Encoding Commands
+    
+    func getEncodingCommand(
+        for format: String,
+        inputPath: String,
+        outputPath: String,
+        quality: Int
+    ) -> (() async -> Bool)? {
+        SmolrLogger.conversion.debug("getEncodingCommand called: format=\(format), input=\(inputPath), quality=\(quality)")
+
+        switch format.lowercased() {
+        case "png":
+            if quality == 100 {
+                guard let oxipngPath = getBundledToolPath(for: "oxipng") else { return nil }
+                let params = EncodingParameters.pngParameters(profile: optimizationProfile, quality: quality)
+                return {
+                    await runCommand(
+                        executable: oxipngPath,
+                        arguments: params + [inputPath, "--out", outputPath]
+                    )
+                }
+            } else {
+                guard let pngquantPath = getBundledToolPath(for: "pngquant"),
+                      let oxipngPath = getBundledToolPath(for: "oxipng") else { return nil }
+                let pngquantParams = EncodingParameters.pngParameters(profile: optimizationProfile, quality: quality)
+                let oxipngLevel = EncodingParameters.pngOptimizationLevel(profile: optimizationProfile)
+                return {
+                    var success = await runCommand(
+                        executable: pngquantPath,
+                        arguments: pngquantParams + ["--output", outputPath, inputPath]
+                    )
+                    if !success {
+                        success = await runCommand(
+                            executable: oxipngPath,
+                            arguments: ["-o", oxipngLevel, "--strip", "all", inputPath, "--out", outputPath]
+                        )
+                    }
+                    return success
+                }
+            }
+            
+        case "jpg", "jpeg":
+            guard let cjpegPath = getBundledToolPath(for: "cjpeg") else { return nil }
+            let cjpegParams = EncodingParameters.jpegParameters(profile: optimizationProfile, quality: quality)
+            return {
+                await runCommand(
+                    executable: cjpegPath,
+                    arguments: cjpegParams + ["-outfile", outputPath, inputPath]
+                )
+            }
+            
+        case "gif":
+            guard let gifsiclePath = getBundledToolPath(for: "gifsicle") else { return nil }
+            let params = EncodingParameters.gifParameters(profile: optimizationProfile, quality: quality)
+            return {
+                await runCommand(
+                    executable: gifsiclePath,
+                    arguments: params + ["-o", outputPath, inputPath]
+                )
+            }
+            
+        case "webp":
+            guard let cwebpPath = getBundledToolPath(for: "cwebp") else { return nil }
+            let params = EncodingParameters.webpParameters(profile: optimizationProfile, quality: quality)
+            return {
+                await runCommand(
+                    executable: cwebpPath,
+                    arguments: params + [inputPath, "-o", outputPath]
+                )
+            }
+            
+        case "avif":
+            guard let avifencPath = getBundledToolPath(for: "avifenc") else { return nil }
+            let params = EncodingParameters.avifParameters(profile: optimizationProfile, quality: quality)
+            return {
+                await runCommand(
+                    executable: avifencPath,
+                    arguments: params + [inputPath, outputPath]
+                )
+            }
+            
+        case "jxl":
+            guard let cjxlPath = getBundledToolPath(for: "cjxl") else { return nil }
+            let lossless = quality == 100
+            let params = EncodingParameters.jxlParameters(profile: optimizationProfile, quality: quality, lossless: lossless)
+            return {
+                await runCommand(
+                    executable: cjxlPath,
+                    arguments: [inputPath, outputPath] + params
+                )
+            }
+            
+        default:
+            return nil
+        }
+    }
+    
+    func decodeToFormat(inputURL: URL, outputPath: String) async -> Bool {
+        let inputExt = inputURL.pathExtension.lowercased()
+        
+        switch inputExt {
+        case "jxl":
+            guard let djxlPath = getBundledToolPath(for: "djxl") else { return false }
+            return await runCommand(executable: djxlPath, arguments: [inputURL.path, outputPath])
+            
+        case "avif":
+            guard let avifdecPath = getBundledToolPath(for: "avifdec") else { return false }
+            return await runCommand(executable: avifdecPath, arguments: [inputURL.path, outputPath])
+            
+        case "webp":
+            guard let dwebpPath = getBundledToolPath(for: "dwebp") else { return false }
+            return await runCommand(executable: dwebpPath, arguments: [inputURL.path, "-o", outputPath])
+        
+        default:
+            if !FileManager.default.fileExists(atPath: "/usr/bin/sips") {
+                SmolrLogger.conversion.error("sips not found on system")
+                return false
+            }
+            SmolrLogger.conversion.debug("Decoding \(inputExt) to PNG using sips")
+            return await runCommand(executable: "/usr/bin/sips", arguments: ["-s", "format", "png", inputURL.path, "--out", outputPath])
+        }
+    }
+    
     func runCommand(executable: String, arguments: [String]) async -> Bool {
         return await withCheckedContinuation { continuation in
             let process = Process()
@@ -540,100 +684,79 @@ struct ContentView: View {
             }
         }
     }
-    func convertFile(inputURL: URL, outputURL: URL) async -> Bool {
-        let inputPath = inputURL.path
-        let outputPath = outputURL.path
-        
-        let targetFormat = outputFormat == "original" ? inputURL.pathExtension.lowercased() : outputFormat.lowercased()
-        
-      
-        guard let commandClosure = getEncodingCommand(for: targetFormat, inputPath: inputPath, outputPath: outputPath, quality: quality) else {
-                await MainActor.run {
-                    showErrorMessage("Unsupported format: \(targetFormat)")
+    
+    
+    // MARK: - View Components
+
+    @ViewBuilder
+    private var formatPicker: some View {
+        if enabledFormats.count <= 4 {
+            Picker("", selection: $outputFormat) {
+                ForEach(enabledFormats, id: \.self) { format in
+                    Text(FormatConfig.displayName(for: format)).tag(format)
                 }
-                return false
             }
-        var success = await commandClosure()
-        
-        if !success && targetFormat != "png" {
-                success = await convertViaIntermediate(inputURL: inputURL, outputURL: outputURL)
+            .pickerStyle(.segmented)
+            .frame(width: calculatePickerWidth())
+        } else {
+            Picker("", selection: $outputFormat) {
+                ForEach(enabledFormats, id: \.self) { format in
+                    Text(FormatConfig.displayName(for: format)).tag(format)
+                }
             }
-        
-        return success
-    }
-
-    func convertViaIntermediate(inputURL: URL, outputURL: URL) async -> Bool {
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".png")
-        
-        let decodeSuccess = await decodeToFormat(inputURL: inputURL, outputPath: tempURL.path)
-        guard decodeSuccess else {
-            return false
-        }
-        
-        let targetFormat = outputFormat == "original" ? outputURL.pathExtension.lowercased() : outputFormat.lowercased()
-        
-        guard let commandClosure = getEncodingCommand(for: targetFormat, inputPath: tempURL.path, outputPath: outputURL.path, quality: quality) else {
-            try? FileManager.default.removeItem(at: tempURL)
-            return false
-        }
-        
-        let success = await commandClosure()
-        try? FileManager.default.removeItem(at: tempURL)
-        return success
-    }
-
-    func decodeToFormat(inputURL: URL, outputPath: String) async -> Bool {
-        let inputExt = inputURL.pathExtension.lowercased()
-        
-        switch inputExt {
-        case "jxl":
-            guard let djxlPath = getBundledToolPath(for: "djxl") else { return false }
-            return await runCommand(executable: djxlPath, arguments: [inputURL.path, outputPath])
-            
-        case "avif":
-            guard let avifdecPath = getBundledToolPath(for: "avifdec") else { return false }
-            return await runCommand(executable: avifdecPath, arguments: [inputURL.path, outputPath])
-            
-        case "webp":
-            guard let dwebpPath = getBundledToolPath(for: "dwebp") else { return false }
-            return await runCommand(executable: dwebpPath, arguments: [inputURL.path, "-o", outputPath])
-            
-        default:
-            return false
+            .pickerStyle(.menu)
+            .frame(width: 120)
         }
     }
     
-    func getBundledToolPath(for tool: String) -> String? {
-        if let resourcePath = Bundle.main.resourcePath {
-            let toolPath = (resourcePath as NSString).appendingPathComponent("Tools/\(tool)")
-            if FileManager.default.fileExists(atPath: toolPath) {
-                return toolPath
-            }
-        }
-        return nil
-    }
-    func toggleSelection(_ file: FileItem, multiSelect: Bool) {
-        if multiSelect {
-            if selectedFiles.contains(file) {
-                selectedFiles.remove(file)
-            } else {
-                selectedFiles.insert(file)
-            }
-        } else {
-            selectedFiles = [file]
+    @ViewBuilder
+    private var profileWarningBanner: some View {
+        if !hideWarnings && (optimizationProfile == .quality || optimizationProfile == .size) {
+            MessageBanner(
+                icon: "clock.badge.exclamationmark",
+                message: "\(optimizationProfile.displayName) profile is enabled. Processing will take longer",
+                color: .orange
+            )
         }
     }
-    func addURLToDroppedFiles(_ url: URL) {
-        var isDirectory: ObjCBool = false
+
+    // Helper view for consistent message styling
+    struct MessageBanner: View {
+        let icon: String
+        let message: String
+        let color: Color
+        var onDismiss: (() -> Void)? = nil
         
-        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
-            if isDirectory.boolValue {
-                enumerateImagesInDirectory(url)
-            } else {
-                droppedFiles.append(FileItem(url: url))
+        var body: some View {
+            HStack {
+                Spacer()
+                HStack(spacing: 8) {
+                    Image(systemName: icon)
+                        .foregroundColor(color)
+                    Text(message)
+                        .font(.caption)
+                        .foregroundColor(color)
+                    if let dismiss = onDismiss {
+                        Button(action: dismiss) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(color.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.leading, 8)
+                .padding(.trailing, onDismiss == nil ? 8 : 4)
+                .padding(.vertical, 4)
+                .background(color.opacity(0.1))
+                .cornerRadius(4)
+                .padding(.trailing, 16)
             }
         }
     }
+    
+    
+    // MARK: - Body
+    
     var body: some View {
         VStack {
             if droppedFiles.isEmpty {
@@ -702,7 +825,7 @@ struct ContentView: View {
                                         .foregroundColor(.green)
                                     
                                 } else if totalBytesSaved < 0 {
-                                    Text("Increased by \(formatBytes(abs(totalBytesSaved))) (total: \(formatBytes(totalOriginalBytes)))")
+                                    Text("Increased by \(formatBytes(abs(totalBytesSaved)))")
                                         .font(.caption)
                                         .foregroundColor(.orange)
                                 } else {
@@ -725,28 +848,12 @@ struct ContentView: View {
                     if !warningMessages.isEmpty && !hideWarnings {
                         VStack(alignment: .trailing, spacing: 4) {
                             ForEach(Array(warningMessages.enumerated()), id: \.offset) { index, warning in
-                                HStack {
-                                    Spacer()
-                                    HStack(spacing: 8) {
-                                        Image(systemName: "exclamationmark.triangle.fill")
-                                            .foregroundColor(.orange)
-                                        Text(warning)
-                                            .font(.caption)
-                                            .foregroundColor(.orange)
-                                        Button(action: {
-                                            warningMessages.remove(at: index)
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.orange.opacity(0.7))
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .padding(.leading, 8)
-                                    .padding(.trailing, 4)
-                                    .padding(.vertical, 4)
-                                    .background(Color.orange.opacity(0.1))
-                                    .cornerRadius(4)
-                                    .padding(.trailing, 16)
+                                MessageBanner(
+                                    icon: "exclamationmark.triangle.fill",
+                                    message: warning,
+                                    color: .orange
+                                ) {
+                                    warningMessages.remove(at: index)
                                 }
                             }
                         }
@@ -754,39 +861,24 @@ struct ContentView: View {
                     if !errorMessages.isEmpty {
                         VStack(alignment: .trailing, spacing: 4) {
                             ForEach(Array(errorMessages.enumerated()), id: \.offset) { index, error in
-                                HStack {
-                                    Spacer()
-                                    HStack(spacing: 8) {
-                                        Text(error)
-                                            .font(.caption)
-                                            .foregroundColor(.red)
-                                        Button(action: {
-                                            errorMessages.remove(at: index)
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(.red.opacity(0.7))
-                                                .onContinuousHover { phase in
-                                                    switch phase {
-                                                    case .active:
-                                                        NSCursor.pointingHand.push()
-                                                    case .ended:
-                                                        NSCursor.pop()
-                                                    }
-                                                }
-                                        }
-                                        
-                                        .buttonStyle(.plain)
+                                MessageBanner(
+                                    icon: "exclamationmark.triangle.fill",
+                                    message: error,
+                                    color: .red
+                                ) {
+                                    errorMessages.remove(at: index)
+                                }
+                                .onContinuousHover { phase in
+                                    switch phase {
+                                    case .active: NSCursor.pointingHand.push()
+                                    case .ended: NSCursor.pop()
                                     }
-                                    .padding(.leading, 8)
-                                    .padding(.trailing, 4)
-                                    .padding(.vertical, 4)
-                                    .background(Color.red.opacity(0.1))
-                                    .cornerRadius(4)
-                                    .padding(.trailing, 16)
                                 }
                             }
                         }
                     }
+                    profileWarningBanner
+                        
                     
                     HStack {
                         Button("Clear All") {
@@ -796,6 +888,7 @@ struct ContentView: View {
                             totalFilesToConvert = 0
                             filesConverted = 0
                             errorMessages.removeAll()
+                            warningMessages.removeAll()
                         }
                         .fixedSize()
                         .keyboardShortcut("k", modifiers: .command)
@@ -804,24 +897,7 @@ struct ContentView: View {
                         
                         HStack(spacing: 16) {
                             Group {
-                                if enabledFormats.count <= 4 {
-                                    Picker("", selection: $outputFormat) {
-                                        ForEach(enabledFormats, id: \.self) { format in
-                                            Text(FormatConfig.displayName(for: format)).tag(format)
-                                        }
-                                    }
-                                    .pickerStyle(.segmented)
-                                    .frame(width: calculatePickerWidth())
-                                } else {
-                                    Picker("", selection: $outputFormat) {
-                                        ForEach(enabledFormats, id: \.self) { format in
-                                            Text(FormatConfig.displayName(for: format)).tag(format)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .frame(width: 120)
-                                }
-                                
+                                formatPicker
                             }
                             .onChange(of: outputFormat) { _, _ in
                                 checkForOutputConflicts()
@@ -895,10 +971,19 @@ struct ContentView: View {
         .onAppear {
             outputFormat = defaultFormat
         }
+        .onChange(of: fileSuffix) { _, _ in
+            checkForOutputConflicts()
+        }
+        .onChange(of: outputFormat) { _, _ in
+            checkForOutputConflicts()
+        }
         .frame(minWidth: 650, minHeight: 300)
         
     }
 }
+
+
+// MARK: - Preview
 
 #Preview {
     ContentView()

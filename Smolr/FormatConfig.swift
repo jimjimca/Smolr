@@ -7,7 +7,7 @@
 import Foundation
 
 struct FormatConfig {
-    static let allFormats = ["original", "webp", "avif", "jxl", "png", "jpeg", "gif"]
+    static let allFormats = ["original", "webp", "avif", "jxl", "png", "jpeg"]
     static let defaultEnabledFormats = "original,webp,avif,jxl"
     
     static func displayName(for format: String) -> String {
@@ -18,7 +18,6 @@ struct FormatConfig {
         case "jxl": return "JXL"
         case "png": return "PNG"
         case "jpeg": return "JPEG"
-        case "gif": return "GIF"
         default: return format.uppercased()
         }
     }
