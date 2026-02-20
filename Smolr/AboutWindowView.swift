@@ -19,7 +19,7 @@ struct AboutWindowView: View {
                 Text("Smolr")
                     .font(.system(size: 32, weight: .bold))
                 
-                Text("Version 1.1.0")
+                Text("Version 1.1.1")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 

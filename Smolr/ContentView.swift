@@ -495,7 +495,9 @@ struct ContentView: View {
         
         SmolrLogger.conversion.debug("Converting \(inputURL.lastPathComponent) (\(inputExt)) to \(targetFormat)")
         
-        if inputExt == targetFormat {
+        let needsIntermediate = ["jpg", "jpeg"].contains(inputExt) && ["jpg", "jpeg"].contains(targetFormat)
+
+        if inputExt == targetFormat && !needsIntermediate {
             guard let commandClosure = getEncodingCommand(for: targetFormat, inputPath: inputURL.path, outputPath: outputURL.path, quality: quality) else {
                 SmolrLogger.conversion.error("No encoder for \(targetFormat)")
                 return false
