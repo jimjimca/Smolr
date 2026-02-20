@@ -10,7 +10,7 @@ struct VersionInfo: Codable, Sendable {
 }
 
 struct UpdateChecker {
-    static let currentVersion = "1.1.0"
+    static let currentVersion = "1.1.1"
     
     static func checkForUpdates(completion: @escaping @Sendable (Bool, String?, URL?) -> Void) {
         guard let url = URL(string: "https://raw.githubusercontent.com/jimjimca/Smolr/main/latest.json") else {
